@@ -1,0 +1,38 @@
+<resources>
+    <string name="app_name">AutoBooks</string>
+    <string name="navigation_drawer_open">Open navigation drawer</string>
+    <string name="navigation_drawer_close">Close navigation drawer</string>
+    <string name="nav_header_title">AutoBooks</string>
+    <string name="nav_header_desc">Navigation header</string>
+    <string name="action_settings">Settings</string>
+
+    <string name="menu_home">Home</string>
+    <string name="menu_gallery">Cloud Save</string>
+    <string name="menu_slideshow">Slideshow</string>
+    <string name="menu_books">Books</string>
+    <string name="menu_cloud_save">Cloud Save</string>
+    <string name="menu_settings">Settings</string>
+
+    <string name="loadEPUB_button">Load EPUB</string>
+
+    <string name="menu_home_favouriteBooks">Favourite Books</string>
+    <string name="menu_home_allBooks">All Books</string>
+    <string name="book_cover">Book Cover</string>
+
+    <string name="menu_book_detail">Book Detail</string>
+    <string name="menu_chapter_reader">Chapter Reader</string>
+    <string name="download">Download</string>
+    <string name="previous_line">previous_line</string>
+    <string name="play_pause">play_pause_button</string>
+    <string name="next_line">next_line_button</string>
+    <string name="favorite_button">favourite_button</string>
+    <string name="login_with_google">Login with Google</string>
+    <string name="upload_cloud_save">Upload Cloud Save</string>
+    <string name="download_cloud_save">Download Cloud Save</string>
+    <string name="log_out">Log Out</string>
+    <string name="not_logged_in">Not logged in</string>
+    <string name="user_profile_image">User profile image</string>
+    <string name="default_web_client_id" translatable="false">402314656450-f9t3fg2ae0jh2o72uvm7g2hc88aa5ucu.apps.googleusercontent.com</string>
+    <string name="downloading">Downloading...</string>
+    <string name="uploading">Uploading...</string>
+</resources>

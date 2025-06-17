@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/mobile_navigation"
+    app:startDestination="@+id/nav_Books">
+
+    <fragment
+        android:id="@+id/nav_Books"
+        android:name="it.unipi.tarabbo.autobooks.ui.home.HomeFragment"
+        android:label="@string/menu_home"
+        tools:layout="@layout/fragment_home">
+        <action
+            android:id="@+id/action_navBooks_to_nav_book_detail"
+            app:destination="@id/nav_book_detail"/>
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_gallery"
+        android:name="it.unipi.tarabbo.autobooks.ui.cloudsave.CloudSaveFragment"
+        android:label="@string/menu_gallery"
+        tools:layout="@layout/fragment_cloudsave" />
+
+    <fragment
+        android:id="@+id/nav_slideshow"
+        android:name="it.unipi.tarabbo.autobooks.ui.settings.SettingsFragment"
+        android:label="@string/menu_slideshow"
+        tools:layout="@layout/fragment_settings" />
+
+    <fragment
+        android:id="@+id/nav_book_detail"
+        android:name="it.unipi.tarabbo.autobooks.ui.BookDetailFragment"
+        android:label="@string/menu_book_detail">
+        <argument
+            android:name="bookId"
+            app:argType="long"/>
+        <action
+            android:id="@+id/action_nav_book_detail_to_nav_chapter_reader"
+            app:destination="@id/nav_chapter_reader"/>
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_chapter_reader"
+        android:name="it.unipi.tarabbo.autobooks.ui.ChapterReaderFragment"
+        android:label="@string/menu_chapter_reader">
+        <argument
+            android:name="chapter"
+            app:argType="it.unipi.tarabbo.autobooks.Chapter"/>
+    </fragment>
+</navigation>
