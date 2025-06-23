@@ -2,16 +2,11 @@ package it.unipi.tarabbo.autobooks
 
 
 import android.app.Activity
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.speech.tts.TextToSpeech
+import android.util.Log
 import android.view.Menu
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -25,15 +20,8 @@ import androidx.navigation.ui.setupWithNavController
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
-import androidx.core.content.ContentProviderCompat.requireContext
-import androidx.core.content.ContextCompat
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import it.unipi.tarabbo.autobooks.databinding.ActivityMainBinding
-import java.io.InputStream
-import it.unipi.tarabbo.autobooks.R
-import it.unipi.tarabbo.autobooks.DatabaseHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
@@ -84,7 +72,7 @@ class MainActivity : AppCompatActivity() {
         // menu should be considered as top level destinations.
         appBarConfiguration = AppBarConfiguration(
             setOf(
-                R.id.nav_Books, R.id.nav_gallery, R.id.nav_slideshow
+                R.id.nav_Books, R.id.nav_cloudsave, R.id.nav_settings
             ), drawerLayout
         )
         setupActionBarWithNavController(navController, appBarConfiguration)
@@ -96,10 +84,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        // Inflate the menu; this adds items to the action bar if it is present.
-        menuInflater.inflate(R.menu.main, menu)
-        return true
+    override fun onDestroy() {
+        try{
+            dbHelper.close()
+        }catch(e : Exception) {Log.d("ERR_MAIN_DESTROY" , e.toString())}
+        super.onDestroy()
     }
 
     override fun onSupportNavigateUp(): Boolean {

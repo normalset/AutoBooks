@@ -8,6 +8,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
+import androidx.core.content.ContentProviderCompat.requireContext
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.fragment.findNavController
@@ -146,11 +148,15 @@ class HomeFragment : Fragment() {
                 }
 
 
-                if (book.coverImage != null) {
-                    val bitmap = BitmapFactory.decodeByteArray(book.coverImage, 0, book.coverImage.size)
-                    coverImageView.setImageBitmap(bitmap)
-                } else {
-                    coverImageView.setImageResource(R.drawable.default_bookcover) // Use a placeholder if no image
+                try{
+                    if(book.coverImage != null) {
+                        val bitmap = BitmapFactory.decodeByteArray(book.coverImage, 0, book.coverImage.size)
+                        coverImageView.setImageBitmap(bitmap)
+                    } else {
+                        coverImageView.setImageResource(R.drawable.default_bookcover) // Use a placeholder if no image
+                    }
+                }catch( e : Exception){
+                    Log.d("ERR_HOMEFRAGMENT" , "Error trying to load cover image : ${e.message}")
                 }
 
                 //Set onClickListener
@@ -176,8 +182,7 @@ class HomeFragment : Fragment() {
 
     //Function to swap fragment to chapter details
     private fun openBookDetail(book : Book){
-        Log.d("HOME_FRAGMENT" ,"Book item clicked, id : ${book.id}" )
-        val fragment = BookDetailFragment.newInstance(book.id)
+        Log.d("HOME_FRAGMENT" ,"Book item clicked, id : ${book.id} , title : ${book.title}" )
 
         val action = HomeFragmentDirections.actionNavBooksToNavBookDetail(book.id)
         findNavController().navigate(action)

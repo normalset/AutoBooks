@@ -1,6 +1,8 @@
 package it.unipi.tarabbo.autobooks.ui
 
+import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.util.Log
@@ -17,8 +19,10 @@ import it.unipi.tarabbo.autobooks.DatabaseHelper
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.style.BackgroundColorSpan
+import android.util.AttributeSet
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.experimental.Experimental
 import androidx.appcompat.widget.Toolbar
 import androidx.lifecycle.lifecycleScope
 import it.unipi.tarabbo.autobooks.TTSHelper
@@ -57,6 +61,13 @@ class ChapterReaderFragment : Fragment(){
         toolbar.isEnabled = true
         toolbar.visibility = View.VISIBLE
 
+        try{
+            ttsHelper?.stopAudio()
+            ttsHelper?.clearPlaybackNotification(requireContext())
+        }catch(e : Exception){
+            Log.d("CH_READER_ONDRESTROY" , "Got error message trying to stop audio : ${e.message}")
+        }
+
         super.onDestroyView()
     }
 
@@ -85,6 +96,9 @@ class ChapterReaderFragment : Fragment(){
             //Setup TTSHelper
             val dbHelper = DatabaseHelper(requireContext())
             ttsHelper = TTSHelper(requireContext() , dbHelper)
+
+            //Create Playback notification channel
+            ttsHelper!!.createPlaybackNotificationChannel(requireContext())
         }catch(e : Exception){
            Log.d("ERR_CH_READER_SETUP1" , e.toString())
         }
@@ -103,7 +117,7 @@ class ChapterReaderFragment : Fragment(){
             }
             val install = checkTTSLaucher.launch(Intent(TextToSpeech.Engine.ACTION_CHECK_TTS_DATA))
         }catch(e : Exception){
-            Log.d("ERR_CH_READER" , e.toString())
+            Log.d("ERR_CH_READER" , "Error while checking tts engine installation : ${e.toString()}")
         }
 
         try {
@@ -129,19 +143,44 @@ class ChapterReaderFragment : Fragment(){
             audioAvailable = chapter.audioGenerated
 
             //set tts button listener
-            button.setOnClickListener{
-                ttsHelper?.createTableIfNeeded()
+            button.setOnClickListener {
+                if (audioAvailable) {
+                    // Show confirmation dialog asking the user if they want to delete the audio
+                    android.app.AlertDialog.Builder(requireContext())
+                        .setTitle("Delete Audio")
+                        .setMessage("Audio for this chapter already exists. Do you want to delete it?")
+                        .setPositiveButton("Delete") { _, _ ->
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                try {
+                                    val dbHelper = DatabaseHelper(requireContext())
+                                    dbHelper.deleteChapterAudioBlob(chapter.bookId, chapter.chapterNumber)
 
-                //Generate audio for chapter
-                Toast.makeText(requireContext() , "Generating audio for chapter ${chapter.chapterNumber}" , Toast.LENGTH_LONG).show()
-                lifecycleScope.launch{
-                    val result = ttsHelper?.generateAudioForChapter(chapter)
-                    if(result == true){
-                        Log.d("CH_READER+TTS_HELPER" , "Audio generated for chapter ${chapter.chapterNumber}")
-                        button.setImageResource(R.drawable.download_done)
-                        audioAvailable = true
-                    }else{
-                        Log.d("CH_READER+TTS_HELPER" , "Failed to generate audio for chapter ${chapter.chapterNumber}")
+                                    // UI updates must be done on main thread
+                                    launch(Dispatchers.Main) {
+                                        button.setImageResource(R.drawable.download)
+                                        Toast.makeText(requireContext(), "Chapter ${chapter.chapterNumber} audio deleted", Toast.LENGTH_SHORT).show()
+                                        audioAvailable = false
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e("CH_READER_DELETEAUDIO", "Failed to delete audio: ${e.message}")
+                                }
+                            }
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                } else {
+                    // Generate audio for chapter
+                    ttsHelper?.createTableIfNeeded()
+                    Toast.makeText(requireContext(), "Generating audio for chapter ${chapter.chapterNumber}", Toast.LENGTH_LONG).show()
+                    lifecycleScope.launch {
+                        val result = ttsHelper?.generateAudioForChapter(chapter)
+                        if (result == true) {
+                            Log.d("CH_READER+TTS_HELPER", "Audio generated for chapter ${chapter.chapterNumber}")
+                            button.setImageResource(R.drawable.download_done)
+                            audioAvailable = true
+                        } else {
+                            Log.d("CH_READER+TTS_HELPER", "Failed to generate audio for chapter ${chapter.chapterNumber}")
+                        }
                     }
                 }
             }
@@ -304,8 +343,10 @@ class ChapterReaderFragment : Fragment(){
                     ttsHelper.onPlaybackComplete = {
                         onLineFinished(ttsHelper , chapter)
                     }
+                    //play line audio, highlight line, update notification and progress bar
                     ttsHelper.playAudioBytes(lineAudio)
                     highlightLine(currentLine , chapter.text , view?.findViewById(R.id.chapterReaderTextView)!!)
+                    ttsHelper.showPlaybackProgressNotification(requireContext() , currentLine + 1 , lineRanges.size , chapter.title)
                 }
             }catch(e : Exception){
                 Log.d("CH_READER" , "PlayLine : ${e.message}")
@@ -321,6 +362,9 @@ class ChapterReaderFragment : Fragment(){
         if(currentLine < lineRanges.size){
             //ReadNextLine if there is one
             playLine(ttsHelper , chapter)
+        } else {
+            //clear playback notification
+            ttsHelper.clearPlaybackNotification(requireContext())
         }
     }
 }

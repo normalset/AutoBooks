@@ -320,4 +320,24 @@ class DatabaseHelper (context : Context) : SQLiteOpenHelper(context , DATABASE_N
         }
         db.update("Books", values, "id = ?", arrayOf(bookId.toString()))
     }
+
+    fun deleteChapterAudioBlob(bookId: Long, chapterNumber: Long): Boolean {
+        val db = writableDatabase
+        return try {
+            val values = ContentValues().apply {
+                putNull("audioData")
+                put("audioGenerated", 0)  // Optional: if you want to reset the flag as well
+            }
+            val rowsUpdated = db.update(
+                "book_${bookId}_chapters",
+                values,
+                "chapterNumber = ?",
+                arrayOf(chapterNumber.toString())
+            )
+            rowsUpdated > 0
+        } catch (e: Exception) {
+            Log.e("DB_LOG", "Error deleting audio blob: ${e.message}")
+            false
+        }
+    }
 }

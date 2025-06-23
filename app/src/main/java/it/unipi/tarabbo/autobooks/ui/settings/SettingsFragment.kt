@@ -10,6 +10,7 @@ import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Spinner
+import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
@@ -32,6 +33,9 @@ class SettingsFragment : Fragment() {
 
     private var avaliableLanguages = mutableListOf<Locale>()
     private var avaliableVoices = mutableListOf<Voice>()
+
+    private var selectedLocale: Locale? = null
+    private var selectedVoice : Voice? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -63,14 +67,50 @@ class SettingsFragment : Fragment() {
                     //set onItemSelectedListener for each item
                     languageSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                         override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                            val selectedLocale = avaliableLanguages[position]
+                            selectedLocale = avaliableLanguages[position]
                             tts?.language = selectedLocale
-                            updateVoicesForLocale(selectedLocale)
+                            selectedLocale?.let { updateVoicesForLocale(it) } //safe access operator, use if not null
                         }
                         override fun onNothingSelected(parent: AdapterView<*>) {
                         }
                     }
                 }
+            }
+        }
+
+        //Set test audio button on click listener
+        binding.testSettingsButton.setOnClickListener {
+            val locale = selectedLocale
+            val voice = selectedVoice
+
+            if (locale != null && voice != null && tts != null) {
+                tts?.language = locale
+                tts?.voice = voice
+
+                val testString = "1 2 3 4 10 100 1000 !"
+                tts?.speak(testString, TextToSpeech.QUEUE_FLUSH, null, "TEST_UTTERANCE")
+            } else {
+                Toast.makeText(requireContext(), "Please select both language and voice first", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+
+        //Set save button on click listener
+        binding.saveSettingsButton.setOnClickListener {
+
+            val locale = selectedLocale
+            val voice = selectedVoice
+
+            if(locale != null && voice != null){
+                val prefs = requireContext().getSharedPreferences("tts_settings" , Context.MODE_PRIVATE)
+                prefs.edit()
+                    .putString("selected_language" , locale.toLanguageTag())
+                    .putString("selected_voice" , voice.name)
+                    .apply()
+
+                Toast.makeText(requireContext() , "Settings saved" , Toast.LENGTH_SHORT).show()
+            }else {
+                Toast.makeText(requireContext(), "Please select both language and voice", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -99,13 +139,7 @@ class SettingsFragment : Fragment() {
         //set onItemSelectedListener
         voiceSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener{
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                val selectedVoice = avaliableVoices[position]
-                //save selected voice in shared preferences, since we are in a fragment, reference to the context is required with requireContext()
-                val prefs = requireContext().getSharedPreferences("tts_prefs" , Context.MODE_PRIVATE)
-                prefs.edit()
-                    .putString("selected_language" , locale.toLanguageTag())
-                    .putString("selected_voice" , selectedVoice.name)
-                    .apply()
+                selectedVoice = avaliableVoices[position]
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }

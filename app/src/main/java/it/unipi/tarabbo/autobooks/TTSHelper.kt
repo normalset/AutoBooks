@@ -133,7 +133,7 @@ class TTSHelper(private val context: Context, private val dbHelper: DatabaseHelp
                 return false
             }
 
-            // Optionally delete temp file after saving
+            // Delete temp file after saving
             audioFile.delete()
             Log.d(TAG, "Audio line $index generated and saved")
             showProgressNotification(context , notificationManager , lines.size, index+1, chapter.chapterNumber)
@@ -281,8 +281,11 @@ class TTSHelper(private val context: Context, private val dbHelper: DatabaseHelp
 
 
     /*
-    * Functions for the progress notification
+    * Functions for the audiobook progress notifications
     */
+
+    private val DOWNLOAD_NOTIFICATION_ID = 1001
+    private val PLAYBACK_NOTIFICATION_ID = 1002
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -309,24 +312,67 @@ class TTSHelper(private val context: Context, private val dbHelper: DatabaseHelp
     ) {
         val builder = NotificationCompat.Builder(context, "tts_generation_channel")
             .setSmallIcon(R.drawable.ic_music_note) // your icon here
-            .setContentTitle("Generating audiobook for chapter ${chapterNumber}")
+            .setContentTitle("Generating audiobook for chapter $chapterNumber")
             .setContentText("Processing line $currentStep of $totalSteps")
             .setOnlyAlertOnce(true)
             .setProgress(totalSteps, currentStep, false)
             .setOngoing(true) // makes it sticky until dismissed
 
-        notificationManager.notify(1001, builder.build())
+        notificationManager.notify(DOWNLOAD_NOTIFICATION_ID, builder.build())
     }
 
     fun showCompletedNotification(context: Context, notificationManager: NotificationManager) {
         val builder = NotificationCompat.Builder(context, "tts_generation_channel")
-            .setSmallIcon(R.drawable.ic_music_note) // your done icon here
+            .setSmallIcon(R.drawable.play_button_arrowhead) // your done icon here
             .setContentTitle("Audiobook generation complete")
             .setContentText("The chapter's audiobook has been generated successfully.")
             .setProgress(0, 0, false)
             .setOngoing(false)
 
-        notificationManager.notify(1001, builder.build())
+        notificationManager.notify(DOWNLOAD_NOTIFICATION_ID, builder.build())
     }
 
+    /* Functions for playback notifications */
+    fun createPlaybackNotificationChannel(context: Context) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    "tts_playback_channel",
+                    "TTS Playback Progress",
+                    NotificationManager.IMPORTANCE_LOW
+                ).apply {
+                    description = "Notification channel for TTS playback progress"
+                }
+                val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                notificationManager.createNotificationChannel(channel)
+            }
+        }catch (e : Exception){
+            Log.d("PLAYBACK_NOTIFICATION", "Error while creating playback notification channel: ${e.message}")
+        }
+    }
+
+    fun showPlaybackProgressNotification(context : Context , currentLine: Int, totalLines: Int, chapterTitle: String) {
+       try {
+           val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+           val builder = NotificationCompat.Builder(context, "tts_playback_channel")
+               .setSmallIcon(R.drawable.play_button_arrowhead)
+               .setContentTitle("Listening to Chapter $chapterTitle")
+               .setContentText("Line $currentLine of $totalLines")
+               .setProgress(totalLines, currentLine, false)
+               .setOnlyAlertOnce(true)
+               .setOngoing(true)
+
+           notificationManager.notify(PLAYBACK_NOTIFICATION_ID, builder.build())
+       }catch (e : Exception){
+           Log.d("PLAYBACK_NOTIFICATION", "Error while showing playback notification: ${e.message}")
+       }
+    }
+
+    fun clearPlaybackNotification(context: Context) {
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.cancel(2001)
+    }
 }
+
+

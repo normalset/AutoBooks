@@ -10,6 +10,7 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.content.ContentProviderCompat.requireContext
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
@@ -23,6 +24,7 @@ import it.unipi.tarabbo.autobooks.Chapter
 import it.unipi.tarabbo.autobooks.DatabaseHelper
 import it.unipi.tarabbo.autobooks.R
 import it.unipi.tarabbo.autobooks.TTSHelper
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class BookDetailFragment : Fragment(){
@@ -150,7 +152,25 @@ class BookDetailFragment : Fragment(){
 
                 //if button is clicked, generate chapter audio
                 statusIcon.setOnClickListener {
-                    if (!chapter.audioGenerated) {
+                    if (chapter.audioGenerated) {
+                        // Show confirmation dialog asking the user if they want to delete the audio
+                        android.app.AlertDialog.Builder(itemView.context)
+                            .setTitle("Delete Audio")
+                            .setMessage("Audio for this chapter already exists. Do you want to delete it?")
+                            .setPositiveButton("Delete") { _, _ ->
+                                try {
+                                    val dbHelper = DatabaseHelper(itemView.context)
+                                    dbHelper.deleteChapterAudioBlob(chapter.bookId, chapter.chapterNumber)
+                                    statusIcon.setImageResource(R.drawable.download)
+                                    Toast.makeText(itemView.context, "Chapter ${chapter.chapterNumber} audio deleted", Toast.LENGTH_SHORT).show()
+                                } catch (e: Exception) {
+                                    Log.e("CH_READER_DELETEAUDIO", "Failed to delete audio: ${e.message}")
+                                }
+                            }
+                            .setNegativeButton("Cancel", null)
+                            .show()
+                    } else {
+                        // Generate chapter's audio
                         // Disable button to prevent multiple clicks
                         statusIcon.isEnabled = false
 
@@ -190,8 +210,6 @@ class BookDetailFragment : Fragment(){
                                 statusIcon.isEnabled = true
                             }
                         }
-                    } else {
-                        Toast.makeText(itemView.context, "Audio already generated", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
