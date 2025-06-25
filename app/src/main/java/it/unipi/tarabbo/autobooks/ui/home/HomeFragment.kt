@@ -20,6 +20,7 @@ import it.unipi.tarabbo.autobooks.DatabaseHelper
 import it.unipi.tarabbo.autobooks.R
 import it.unipi.tarabbo.autobooks.databinding.FragmentHomeBinding
 import it.unipi.tarabbo.autobooks.ui.BookDetailFragment
+import kotlinx.coroutines.Dispatchers
 import kotlin.text.replace
 
 /*
@@ -63,6 +64,7 @@ class HomeFragment : Fragment() {
     override fun onResume(){
         super.onResume()
         loadBooks()
+
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -127,6 +129,7 @@ class HomeFragment : Fragment() {
         fun submitList(newBooks: List<Book>) {
             books.clear()
             books.addAll(newBooks)
+            notifyDataSetChanged()
         }
 
         inner class BookViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -162,6 +165,24 @@ class HomeFragment : Fragment() {
                 //Set onClickListener
                 itemView.setOnClickListener {
                     onBookClick?.invoke(book) // when a book is clicked call the lambda function with book
+                }
+
+                itemView.setOnLongClickListener {
+                    android.app.AlertDialog.Builder(itemView.context)
+                        .setTitle("Delete Book")
+                        .setMessage("Want to delete this Book and it's Chapters?")
+                        .setPositiveButton("Delete") { _, _ ->
+                            try {
+                                val dbHelper = DatabaseHelper(itemView.context)
+                                dbHelper.deleteBook(book.id)
+                                Toast.makeText(itemView.context, "Book deleted", Toast.LENGTH_SHORT).show()
+                            } catch (e: Exception) {
+                                Log.e("HOMEFRAGMENT", "Failed to delete book ${book.id}: ${e.message}")
+                            }
+                    }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                    true
                 }
             }
         }

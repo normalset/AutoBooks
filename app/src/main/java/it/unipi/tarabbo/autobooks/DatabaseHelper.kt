@@ -34,7 +34,8 @@ class DatabaseHelper (context : Context) : SQLiteOpenHelper(context , DATABASE_N
     }
 
     override fun onUpgrade(db: SQLiteDatabase?, oldVersion: Int, newVersion: Int) {
-        TODO("Not yet implemented")
+        Log.w("DB_LOG", "Upgrading DB from $oldVersion to $newVersion")
+        db?.execSQL("DROP TABLE IF EXISTS Books")
     }
 
     // Create a new book table
@@ -191,6 +192,24 @@ class DatabaseHelper (context : Context) : SQLiteOpenHelper(context , DATABASE_N
             -1L
         }
     }
+
+    //Function to delete a book and its chapters table drom the db
+    fun deleteBook(bookId: Long): Boolean {
+        val db = writableDatabase
+        return try {
+            db.beginTransaction()
+            db.delete("Books", "id = ?", arrayOf(bookId.toString()))
+            db.execSQL("DROP TABLE IF EXISTS book_${bookId}_chapters")
+            db.setTransactionSuccessful()
+            true
+        } catch (e: Exception) {
+            Log.e("DB_LOG", "Failed to delete book: ${e.message}")
+            false
+        } finally {
+            db.endTransaction()
+        }
+    }
+
 
     // [DEBUG FUNCTION]
     fun logAllBooksAndChapters(context: Context) {

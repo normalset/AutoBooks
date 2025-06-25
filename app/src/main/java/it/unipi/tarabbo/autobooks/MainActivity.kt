@@ -60,10 +60,11 @@ class MainActivity : AppCompatActivity() {
         setSupportActionBar(binding.appBarMain.toolbar)
 
         binding.appBarMain.fab.setOnClickListener { view ->
-            Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                .setAction("Action", null)
-                .setAnchorView(R.id.fab).show()
-            openFilePicker()
+            try{
+                openFilePicker()
+            }catch( e : Exception){
+                Log.d("MAINACTIVITY" , "Error while trying to open fab : ${e.message}")
+            }
         }
         val drawerLayout: DrawerLayout = binding.drawerLayout
         val navView: NavigationView = binding.navView
@@ -118,6 +119,7 @@ class MainActivity : AppCompatActivity() {
                     } ?: -1L
                 }
 
+                //Check if the epub loading process was successful
                 if (bookId != -1L) {
                     Toast.makeText(this@MainActivity, "EPUB loaded successfully! Book ID: $bookId", Toast.LENGTH_LONG).show()
                 } else {

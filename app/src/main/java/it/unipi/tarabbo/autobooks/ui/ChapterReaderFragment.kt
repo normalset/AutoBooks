@@ -144,7 +144,7 @@ class ChapterReaderFragment : Fragment(){
 
             //set tts button listener
             button.setOnClickListener {
-                if (audioAvailable) {
+                if (audioAvailable) { // chapters audio already generated
                     // Show confirmation dialog asking the user if they want to delete the audio
                     android.app.AlertDialog.Builder(requireContext())
                         .setTitle("Delete Audio")
@@ -155,7 +155,7 @@ class ChapterReaderFragment : Fragment(){
                                     val dbHelper = DatabaseHelper(requireContext())
                                     dbHelper.deleteChapterAudioBlob(chapter.bookId, chapter.chapterNumber)
 
-                                    // UI updates must be done on main thread
+                                    // UI updates must be done on main thread, se we launch Dispatchers.Main instead of IO
                                     launch(Dispatchers.Main) {
                                         button.setImageResource(R.drawable.download)
                                         Toast.makeText(requireContext(), "Chapter ${chapter.chapterNumber} audio deleted", Toast.LENGTH_SHORT).show()
@@ -168,7 +168,7 @@ class ChapterReaderFragment : Fragment(){
                         }
                         .setNegativeButton("Cancel", null)
                         .show()
-                } else {
+                } else { // audio not yet generated, generate it
                     // Generate audio for chapter
                     ttsHelper?.createTableIfNeeded()
                     Toast.makeText(requireContext(), "Generating audio for chapter ${chapter.chapterNumber}", Toast.LENGTH_LONG).show()
@@ -232,6 +232,8 @@ class ChapterReaderFragment : Fragment(){
                     playingAudio = true
                     playButton.setImageResource(R.drawable.pause)
                 }
+            }else{
+                Toast.makeText(requireContext() , "Generate Audio in the Top Right Corner", Toast.LENGTH_SHORT).show()
             }
         }
 
