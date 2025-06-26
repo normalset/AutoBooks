@@ -122,6 +122,10 @@ class MainActivity : AppCompatActivity() {
                 //Check if the epub loading process was successful
                 if (bookId != -1L) {
                     Toast.makeText(this@MainActivity, "EPUB loaded successfully! Book ID: $bookId", Toast.LENGTH_LONG).show()
+
+                    //reload the fragment to show the new book
+                    val navController = findNavController(R.id.nav_host_fragment_content_main)
+                    navController.navigate(R.id.nav_Books)
                 } else {
                     Toast.makeText(this@MainActivity, "Failed to load EPUB into database", Toast.LENGTH_SHORT).show()
                 }

@@ -63,8 +63,6 @@ class HomeFragment : Fragment() {
 
     override fun onResume(){
         super.onResume()
-        loadBooks()
-
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -72,9 +70,16 @@ class HomeFragment : Fragment() {
 
 
         // Create adapters and define onBookClick lambda function implementation
-        favouritesAdapter = BookAdapter(showText = false) {book -> openBookDetail(book)}
-        allBooksAdapter = BookAdapter(showText = true) {book -> openBookDetail(book)}
-
+        favouritesAdapter = BookAdapter(
+            showText = false ,
+            onBookClick = { book -> openBookDetail(book) } ,
+            onBookDeleted = { loadBooks() }
+        )
+        allBooksAdapter = BookAdapter(
+            showText = true ,
+            onBookClick = { book -> openBookDetail(book) } ,
+            onBookDeleted = {loadBooks()}
+        )
         binding.favouritesRecyclerView.apply{
             adapter = favouritesAdapter
             layoutManager = LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
@@ -121,7 +126,8 @@ class HomeFragment : Fragment() {
 
     class BookAdapter(
         private val showText : Boolean = true,
-        private val onBookClick: ((Book) -> Unit)? = null)
+        private val onBookClick: ((Book) -> Unit)? = null ,
+        private val onBookDeleted : (() -> Unit)? = null)
         : RecyclerView.Adapter<BookAdapter.BookViewHolder>() {
 
         private val books = mutableListOf<Book>()
@@ -176,6 +182,7 @@ class HomeFragment : Fragment() {
                                 val dbHelper = DatabaseHelper(itemView.context)
                                 dbHelper.deleteBook(book.id)
                                 Toast.makeText(itemView.context, "Book deleted", Toast.LENGTH_SHORT).show()
+                                onBookDeleted?.invoke()
                             } catch (e: Exception) {
                                 Log.e("HOMEFRAGMENT", "Failed to delete book ${book.id}: ${e.message}")
                             }

@@ -21,6 +21,7 @@ import androidx.credentials.exceptions.GetCredentialException
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.bumptech.glide.Glide
+import com.google.android.gms.common.api.ApiException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import it.unipi.tarabbo.autobooks.R
@@ -50,6 +51,7 @@ class CloudSaveFragment : Fragment() {
     private lateinit var credentialManager: CredentialManager
     private var googleAccountCredential: GoogleAccountCredential? = null
     private var driveService: Drive? = null
+    val REQUEST_GOOGLE_SIGN_IN = 1002
 
     // Database file name
     private val DATABASE_NAME = "AutoBooksDB.db" // Make sure this matches your DatabaseHelper.DATABASE_NAME
@@ -138,7 +140,19 @@ class CloudSaveFragment : Fragment() {
                 if (e !is CancellationException) {
                     Toast.makeText(requireContext(), "SignInWithGoogle : Sign-in failed: ${e.message}", Toast.LENGTH_LONG).show()
                 }
-                updateUI(null, null, null)
+                Log.w("CloudSaveFragment", "CredentialManager sign-in failed, trying fallback: ${e.message}")
+
+                // Fallback: Use GoogleSignInClient manually
+                val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(
+                    com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN
+                )
+                    .requestEmail()
+                    .requestIdToken(getString(R.string.default_web_client_id))
+                    .build()
+
+                val signInClient = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(requireActivity(), gso)
+                val signInIntent = signInClient.signInIntent
+                startActivityForResult(signInIntent, REQUEST_GOOGLE_SIGN_IN)
             } catch (e: CancellationException) {
                 Log.d("CloudSaveFragment", "SignInWithGoogle : Explicit sign-in Job cancelled.")
             } catch (e: Exception) {
@@ -332,7 +346,6 @@ class CloudSaveFragment : Fragment() {
         }
     }
 
-    // Add this constant to your CloudSaveFragment class
     private val REQUEST_AUTHORIZATION = 1001;
 
     // Override onActivityResult to handle the result of the authorization intent
@@ -346,6 +359,37 @@ class CloudSaveFragment : Fragment() {
                 // User denied permissions or an error occurred
                 Toast.makeText(requireContext(), "Authorization failed.", Toast.LENGTH_LONG).show();
                 Log.e("CloudSaveFragment", "User authorization failed.");
+            }
+        }
+        if(requestCode == REQUEST_GOOGLE_SIGN_IN){
+            // if there werent any avaliable credentials, a login request was made
+            val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(data)
+            try {
+                val account = task.getResult(ApiException::class.java)
+                val idToken = account.idToken
+                val email = account.email
+                val displayName = account.displayName
+                val photoUri = account.photoUrl
+
+                Log.d("CloudSaveFragment", "Fallback Sign-in success: $email, token: $idToken")
+
+                val acc = Account(email!!, "com.google")
+                googleAccountCredential = GoogleAccountCredential.usingOAuth2(
+                    requireContext(), listOf(DriveScopes.DRIVE_APPDATA)
+                ).apply {
+                    selectedAccount = acc
+                }
+
+                driveService = Drive.Builder(
+                    AndroidHttp.newCompatibleTransport(),
+                    GsonFactory.getDefaultInstance(),
+                    googleAccountCredential
+                ).setApplicationName(getString(R.string.app_name)).build()
+
+                updateUI(email, displayName, photoUri)
+            } catch (e: ApiException) {
+                Log.e("CloudSaveFragment", "Fallback sign-in failed: ${e.message}", e)
+                Toast.makeText(requireContext(), "Google Sign-In failed.", Toast.LENGTH_SHORT).show()
             }
         }
     }
