@@ -1,9 +1,12 @@
 package it.unipi.tarabbo.autobooks.ui
 
 import android.content.Context
+import android.content.Context.POWER_SERVICE
 import android.content.Intent
 import android.content.res.Configuration
+import android.health.connect.datatypes.units.Power
 import android.os.Bundle
+import android.os.PowerManager
 import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.view.LayoutInflater
@@ -24,6 +27,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.experimental.Experimental
 import androidx.appcompat.widget.Toolbar
+import androidx.core.content.ContextCompat.getSystemService
 import androidx.lifecycle.lifecycleScope
 import it.unipi.tarabbo.autobooks.TTSHelper
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +44,9 @@ class ChapterReaderFragment : Fragment(){
     private var playingAudio : Boolean = false
     var audioAvailable : Boolean = false
 
+    private var powerManager : android.os.PowerManager? = null
+    private var wakeLock : android.os.PowerManager.WakeLock? = null
+
     lateinit var progressBar : com.google.android.material.progressindicator.LinearProgressIndicator
 
     override fun onCreateView(
@@ -51,6 +58,7 @@ class ChapterReaderFragment : Fragment(){
     }
 
     override fun onDestroyView() {
+        super.onDestroyView()
         // Enable Add Book Fab before destroying view
         val fab = requireActivity().findViewById<com.google.android.material.floatingactionbutton.FloatingActionButton>(R.id.fab)
         fab.isEnabled = true
@@ -68,12 +76,25 @@ class ChapterReaderFragment : Fragment(){
             Log.d("CH_READER_ONDRESTROY" , "Got error message trying to stop audio : ${e.message}")
         }
 
-        super.onDestroyView()
+        try{
+            // Release TTSHelper mediaplayer before destroying view
+            TTSHelper.mediaPlayer?.release()
+            TTSHelper.mediaPlayer = null
+        }catch( e : Exception){
+            Log.d("CH_READER_ONDRESTROY" , "Got error message trying to release mediaplayer : ${e.message}")
+        }
+
+        //Release the wakelock if the view gets destroyed
+        wakeLock?.release()
     }
 
     override fun onViewCreated(view : View, savedInstanceState: Bundle?){
         super.onViewCreated(view, savedInstanceState)
 
+        //Set wake lock so that the screen doesnt dim while the chapter reader is on screen
+        powerManager = requireContext().getSystemService(POWER_SERVICE) as android.os.PowerManager
+        wakeLock = powerManager?.newWakeLock(PowerManager.SCREEN_DIM_WAKE_LOCK , "AutoBooks:ChapterReaderWakeLock")
+        wakeLock?.acquire(10*60*1000L /*10 minutes*/)
 
         //Update chapter isRead status if first time open
         if(args.chapter.isRead == 0){

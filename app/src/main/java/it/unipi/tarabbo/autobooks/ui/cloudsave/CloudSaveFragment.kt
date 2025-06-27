@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -19,6 +21,7 @@ import androidx.credentials.GetCredentialResponse
 import androidx.credentials.exceptions.ClearCredentialException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.bumptech.glide.Glide
 import com.google.android.gms.common.api.ApiException
@@ -30,6 +33,7 @@ import kotlinx.coroutines.launch
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
 import com.google.api.client.extensions.android.http.AndroidHttp
 import com.google.api.client.googleapis.extensions.android.gms.auth.UserRecoverableAuthIOException
+import com.google.api.client.googleapis.media.MediaHttpDownloader
 import com.google.api.client.json.gson.GsonFactory
 import com.google.api.services.drive.Drive
 import com.google.api.services.drive.DriveScopes
@@ -71,7 +75,7 @@ class CloudSaveFragment : Fragment() {
 
         // Set up click listeners
         binding.loginButton.setOnClickListener {
-            lifecycleScope.launch {
+            viewLifecycleOwner.lifecycleScope.launch {
                 try {
                     //method that initiates the full Google Sign-In flow
                     signInWithGoogle()
@@ -85,7 +89,7 @@ class CloudSaveFragment : Fragment() {
             }
         }
         binding.logoutButton.setOnClickListener {
-            lifecycleScope.launch {
+            viewLifecycleOwner.lifecycleScope.launch {
                 try{
                     signOut()
                 }catch(e : Exception){
@@ -94,7 +98,7 @@ class CloudSaveFragment : Fragment() {
             }
         }
         binding.uploadButton.setOnClickListener {
-            lifecycleScope.launch {
+            viewLifecycleOwner.lifecycleScope.launch {
                 try{
                     uploadDatabaseToDrive()
                 }catch(e : Exception){
@@ -103,26 +107,26 @@ class CloudSaveFragment : Fragment() {
             }
         }
         binding.downloadButton.setOnClickListener {
-            lifecycleScope.launch {
+            viewLifecycleOwner.lifecycleScope.launch {
                 try{
-                    downloadDatabaseFromDrive()
+                    downloadDatabaseFromDriveSafe()
                 }catch(e : Exception){
                     Log.e("CloudSaveFragment", "Error downloading database: ${e.message}")
                 }
             }
         }
 
-        // Check for existing Google Sign-In account (Credential Manager handles this implicitly on request)
-        lifecycleScope.launch {
+        // Check for existing Google Sign-In account
+        viewLifecycleOwner.lifecycleScope.launch {
             trySignInSilently()
         }
     }
 
     private fun signInWithGoogle() {
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             val googleIdOption: GetGoogleIdOption = GetGoogleIdOption.Builder()
                 .setServerClientId(getString(R.string.default_web_client_id))
-                .setFilterByAuthorizedAccounts(false) // IMPORTANT: Allow user to pick any Google account
+                .setFilterByAuthorizedAccounts(false) // Allow user to pick any Google account
                 .build()
 
             val request = GetCredentialRequest.Builder()
@@ -166,7 +170,7 @@ class CloudSaveFragment : Fragment() {
     }
 
     private fun trySignInSilently() {
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             val googleIdOption: GetGoogleIdOption = GetGoogleIdOption.Builder()
                 .setServerClientId(getString(R.string.default_web_client_id))
                 .setFilterByAuthorizedAccounts(true)
@@ -254,7 +258,7 @@ class CloudSaveFragment : Fragment() {
     }
 
     private fun signOut() {
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             try {
                 credentialManager.clearCredentialState(ClearCredentialStateRequest())
                 googleAccountCredential = null // Clear credential
@@ -279,16 +283,24 @@ class CloudSaveFragment : Fragment() {
         return requireContext().getDatabasePath(DATABASE_NAME)
     }
 
+    /*
+    * The approach of using callbacks to get results from the drive operations is no longer supported in the latest version Drive REST API v3
+    * So coroutines are used instead with Dispatchers.IO
+     */
+
     private fun uploadDatabaseToDrive() {
         if (driveService == null) {
             Toast.makeText(requireContext(), "Not signed in to Google Drive.", Toast.LENGTH_SHORT).show()
             return;
         }
 
-        binding.uploadButton.isEnabled = false;
-        binding.uploadButton.text = getString(R.string.uploading);
+        //check if the fragment is still valid before updating the UI to avoid crashes
+        if (isAdded && _binding != null) {
+            binding.uploadButton.isEnabled = false
+            binding.uploadButton.text = getString(R.string.uploading)
+        }
 
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             try {
                 val dbFile = getDatabaseFile();
                 if (!dbFile.exists()) {
@@ -340,8 +352,13 @@ class CloudSaveFragment : Fragment() {
                 Log.e("CloudSaveFragment", "Error uploading database: ${e.message}", e);
                 Toast.makeText(requireContext(), "Upload failed: ${e.message}", Toast.LENGTH_LONG).show();
             } finally {
-                binding.uploadButton.isEnabled = true;
-                binding.uploadButton.text = getString(R.string.upload_cloud_save);
+                //check if the fragment is still valid before updating the UI to avoid crashes
+                if (isAdded && _binding != null && viewLifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                    binding.downloadButton.isEnabled = true
+                    binding.downloadButton.text = getString(R.string.download_cloud_save)
+                } else {
+                    Log.d("CloudSaveFragment", "Skipping UI update in finally block: Fragment not in a valid state.")
+                }
             }
         }
     }
@@ -362,7 +379,7 @@ class CloudSaveFragment : Fragment() {
             }
         }
         if(requestCode == REQUEST_GOOGLE_SIGN_IN){
-            // if there werent any avaliable credentials, a login request was made
+            // if there werent any available credentials, a login request was made
             val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(data)
             try {
                 val account = task.getResult(ApiException::class.java)
@@ -394,6 +411,7 @@ class CloudSaveFragment : Fragment() {
         }
     }
 
+    @Synchronized
     private fun downloadDatabaseFromDrive() {
         if (driveService == null) {
             Toast.makeText(requireContext(), "Not signed in to Google Drive.", Toast.LENGTH_SHORT).show()
@@ -403,7 +421,7 @@ class CloudSaveFragment : Fragment() {
         binding.downloadButton.isEnabled = false // Disable button during operation
         binding.downloadButton.text = getString(R.string.downloading)
 
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             try {
                val success = withContext(Dispatchers.IO){
                    // Find the database file in Drive's app folder
@@ -430,7 +448,7 @@ class CloudSaveFragment : Fragment() {
                    return@withContext true
                }
                 if (success) {
-                    Toast.makeText(requireContext(), "Database downloaded successfully!", Toast.LENGTH_LONG).show()
+                    Toast.makeText(requireContext(), "Backup downloaded successfully!", Toast.LENGTH_LONG).show()
                     Log.d("CloudSaveFragment", "Download complete! Database saved to ${getDatabaseFile().absolutePath}")
                 } else {
                     Toast.makeText(requireContext(), "No database backup found in Drive.", Toast.LENGTH_LONG).show()
@@ -444,6 +462,93 @@ class CloudSaveFragment : Fragment() {
             }
         }
     }
+
+    private fun downloadDatabaseFromDriveSafe() {
+        if (driveService == null) {
+            Toast.makeText(requireContext(), "Not signed in to Google Drive.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        //check if the fragment is still valid before updating the UI to avoid crashes
+        if(isAdded && _binding != null){
+            binding.downloadButton.isEnabled = false
+            binding.downloadButton.text = getString(R.string.downloading)
+            binding.downloadProgressBar.progress = 0
+            binding.downloadProgressBar.visibility = View.VISIBLE
+        }
+        else{
+            Log.d("CloudSaveFragment", "Skipping UI update in downloadDatabaseFromDriveSafe: Fragment not in a valid state.")
+            return
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val success = withContext(Dispatchers.IO) {
+                    // Step 1: Look up file in Drive
+                    val files = driveService?.files()?.list()
+                        ?.setQ("'appDataFolder' in parents and name = '$DATABASE_NAME'")
+                        ?.setSpaces("appDataFolder")
+                        ?.setFields("files(id, name, modifiedTime)")
+                        ?.execute()
+
+                    val driveFile = files?.files?.firstOrNull()
+                        ?: return@withContext false.also {
+                            Log.d("CloudSaveFragment", "No backup found for $DATABASE_NAME in appDataFolder.")
+                        }
+
+                    Log.d("CloudSaveFragment", "Found backup: ${driveFile.name} (ID: ${driveFile.id})")
+
+                    // Step 2: Download to temp file
+                    val tempFile = File.createTempFile("db_download", ".tmp", requireContext().cacheDir)
+                    FileOutputStream(tempFile).use { outputStream ->
+                        val request = driveService?.files()?.get(driveFile.id)
+                        val downloader = request?.mediaHttpDownloader
+                        downloader?.chunkSize = 1024 * 1024 // 1MB
+
+                        downloader?.setProgressListener { prog ->
+                            val percent = (prog.progress * 100).toInt()
+                            if (prog.downloadState == MediaHttpDownloader.DownloadState.MEDIA_IN_PROGRESS) {
+                                Log.d("Download", "Progress: $percent%")
+                                viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
+                                    binding.downloadProgressBar.progress = percent
+                                }
+                            }
+                        }
+
+                        request?.executeMediaAndDownloadTo(outputStream)
+                    }
+
+                    // Step 3: Move temp file to final location atomically
+                    val dbFile = getDatabaseFile()
+                    if (dbFile.exists()) dbFile.delete()
+                    tempFile.copyTo(dbFile, overwrite = true)
+                    tempFile.delete()
+
+                    return@withContext true
+                }
+
+                if (success) {
+                    Toast.makeText(requireContext(), "Backup downloaded successfully!", Toast.LENGTH_LONG).show()
+                    Log.d("CloudSaveFragment", "Database saved to ${getDatabaseFile().absolutePath}")
+                } else {
+                    Toast.makeText(requireContext(), "No database backup found in Drive.", Toast.LENGTH_LONG).show()
+                }
+
+            } catch (e: Exception) {
+                Log.e("CloudSaveFragment", "Download error: ${e.message}", e)
+                Toast.makeText(requireContext(), "Download failed: ${e.message}", Toast.LENGTH_LONG).show()
+            } finally {
+                if (isAdded && _binding != null && viewLifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                    binding.downloadButton.isEnabled = true
+                    binding.downloadButton.text = getString(R.string.download_cloud_save)
+                    binding.downloadProgressBar.visibility = View.GONE
+                }
+            }
+        }
+    }
+
+
+
 
 
     private fun updateUI(email: String?, displayName: String?, photoUri: Uri?) {
@@ -483,6 +588,14 @@ class CloudSaveFragment : Fragment() {
     override fun onDestroyView() {
         super.onDestroyView()
         Log.d("CloudSaveFragment", "onDestroyView called, setting _binding to null.")
+
+        //Remove any remaining temp files
+        requireContext().cacheDir.listFiles()?.forEach { file ->
+            if (file.name.startsWith("db_download") && file.name.endsWith(".tmp")) {
+                file.delete()
+            }
+        }
+
         _binding = null
     }
 }

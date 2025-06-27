@@ -8,6 +8,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.media.MediaPlayer
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.MediaStore
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
@@ -24,10 +25,11 @@ class TTSHelper(private val context: Context, private val dbHelper: DatabaseHelp
     companion object {
         private const val TAG = "TTSHelper"
         private const val TABLE_NAME = "chapterTextLines"
+        var mediaPlayer: MediaPlayer? = MediaPlayer()
     }
 
     private var tts: TextToSpeech? = null
-    var mediaPlayer: MediaPlayer? = MediaPlayer()
+
 
     //Callback to notify when playback is complete
     var onPlaybackComplete: (() -> Unit)? = null
@@ -195,7 +197,8 @@ class TTSHelper(private val context: Context, private val dbHelper: DatabaseHelp
 
             mediaPlayer = MediaPlayer().apply {
                 setDataSource(tempFile.absolutePath)
-                prepare()
+//                prepare()
+                prepareAsync()
                 setOnCompletionListener {
 //                    it.release()
                     tempFile.delete()
@@ -206,6 +209,8 @@ class TTSHelper(private val context: Context, private val dbHelper: DatabaseHelp
                 }
                 start()
             }
+
+
         } catch (e: Exception) {
             Log.e(TAG, "Error playing audio bytes: ${e.message}")
         }
