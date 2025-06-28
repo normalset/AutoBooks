@@ -45,6 +45,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.google.api.services.drive.model.File as DriveFile // Alias File to avoid conflict
 import kotlinx.coroutines.CancellationException
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import com.google.api.client.googleapis.media.MediaHttpUploader
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
 
 
 class CloudSaveFragment : Fragment() {
@@ -100,7 +107,9 @@ class CloudSaveFragment : Fragment() {
         binding.uploadButton.setOnClickListener {
             viewLifecycleOwner.lifecycleScope.launch {
                 try{
-                    uploadDatabaseToDrive()
+                    Thread {
+                        uploadDatabaseToDrive()
+                    }.start()
                 }catch(e : Exception){
                     Log.e("CloudSaveFragment", "Error uploading database: ${e.message}")
                 }
@@ -109,7 +118,9 @@ class CloudSaveFragment : Fragment() {
         binding.downloadButton.setOnClickListener {
             viewLifecycleOwner.lifecycleScope.launch {
                 try{
-                    downloadDatabaseFromDriveSafe()
+                    Thread{
+                        downloadDatabaseFromDriveSafe()
+                    }.start()
                 }catch(e : Exception){
                     Log.e("CloudSaveFragment", "Error downloading database: ${e.message}")
                 }
@@ -294,17 +305,37 @@ class CloudSaveFragment : Fragment() {
             return;
         }
 
-        //check if the fragment is still valid before updating the UI to avoid crashes
-        if (isAdded && _binding != null) {
-            binding.uploadButton.isEnabled = false
-            binding.uploadButton.text = getString(R.string.uploading)
+       //Create notification channel
+        val notificationManager = requireContext().getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channel_id = "drive_upload_channel"
+
+        // Create notification channel for Android 8+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channel_id,
+                "Drive Upload",
+                NotificationManager.IMPORTANCE_LOW
+            )
+            notificationManager.createNotificationChannel(channel)
         }
 
-        viewLifecycleOwner.lifecycleScope.launch {
+        //Create notification
+        val notification_id = 1005
+        val notificationBuilder = NotificationCompat.Builder(requireContext(), channel_id)
+            .setSmallIcon(R.drawable.cloud)
+            .setContentTitle("Uploading Backup")
+            .setContentText("Upload in progress...")
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOnlyAlertOnce(true)
+            .setProgress(0, 0, true)
+
+        CoroutineScope(Dispatchers.Main).launch {
             try {
                 val dbFile = getDatabaseFile();
                 if (!dbFile.exists()) {
-                    Toast.makeText(requireContext(), "Local database file not found!", Toast.LENGTH_LONG).show();
+                    notificationBuilder.setContentText("Backup Failed!")
+                        .setProgress(0, 0, false)
+                    notificationManager.notify(notification_id, notificationBuilder.build())
                     Log.e("CloudSaveFragment", "Local database file not found at: ${dbFile.absolutePath}");
                     return@launch;
                 }
@@ -323,7 +354,34 @@ class CloudSaveFragment : Fragment() {
                     val fileContent = FileContent("application/x-sqlite3", dbFile);
 
                     val driveFileMetadata = DriveFile().setName(DATABASE_NAME)
-                        .setParents(listOf("appDataFolder"));
+//                        .setParents(listOf("appDataFolder"));
+
+                    //Setup Progress notifications
+                    val request = if (existingFile != null) {
+                        driveService?.files()?.update(existingFile.id, driveFileMetadata, fileContent)
+                    } else {
+                        driveFileMetadata.parents = listOf("appDataFolder")
+                        driveService?.files()?.create(driveFileMetadata, fileContent)
+                    }
+
+                    // Set up uploader
+                    val uploader = request?.mediaHttpUploader
+                    uploader?.chunkSize = 1024 * 1024  // 1MB chunks
+                    uploader?.isDirectUploadEnabled = false
+
+                    uploader?.setProgressListener { prog ->
+                        val progress = (prog.progress * 100).toInt()
+                        if (prog.uploadState == MediaHttpUploader.UploadState.MEDIA_IN_PROGRESS) {
+                            CoroutineScope(Dispatchers.Main).launch {
+                                notificationBuilder
+                                    .setContentText("Uploading: $progress%")
+                                    .setProgress(100, progress, false)
+                                notificationManager.notify(notification_id, notificationBuilder.build())
+                            }
+                        }
+                    }
+                    request?.execute()
+
 
                     if (existingFile != null) {
                         // Update existing file
@@ -337,10 +395,14 @@ class CloudSaveFragment : Fragment() {
                 }
 
                 if (uploadedFile != null) {
-                    Toast.makeText(requireContext(), "Database uploaded successfully!", Toast.LENGTH_SHORT).show();
+                    notificationBuilder.setContentText("Database uploaded successfully!")
+                        .setProgress(0, 0, false)
+                    notificationManager.notify(notification_id, notificationBuilder.build())
                     Log.d("CloudSaveFragment", "Upload complete! File ID: ${uploadedFile.id}");
                 } else {
-                    Toast.makeText(requireContext(), "Failed to upload database.", Toast.LENGTH_LONG).show();
+                    notificationBuilder.setContentText("Failed to upload database.")
+                        .setProgress(0, 0, false)
+                    notificationManager.notify(notification_id, notificationBuilder.build())
                     Log.e("CloudSaveFragment", "Upload failed, uploadedFile is null.");
                 }
 
@@ -350,15 +412,9 @@ class CloudSaveFragment : Fragment() {
                 Log.e("CloudSaveFragment", "UserRecoverableAuthIOException: ${e.message}", e);
             } catch (e: Exception) {
                 Log.e("CloudSaveFragment", "Error uploading database: ${e.message}", e);
-                Toast.makeText(requireContext(), "Upload failed: ${e.message}", Toast.LENGTH_LONG).show();
-            } finally {
-                //check if the fragment is still valid before updating the UI to avoid crashes
-                if (isAdded && _binding != null && viewLifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-                    binding.downloadButton.isEnabled = true
-                    binding.downloadButton.text = getString(R.string.download_cloud_save)
-                } else {
-                    Log.d("CloudSaveFragment", "Skipping UI update in finally block: Fragment not in a valid state.")
-                }
+                notificationBuilder.setContentText("Upload failed: ${e.message}")
+                    .setProgress(0, 0, false)
+                notificationManager.notify(notification_id, notificationBuilder.build())
             }
         }
     }
@@ -469,19 +525,30 @@ class CloudSaveFragment : Fragment() {
             return
         }
 
-        //check if the fragment is still valid before updating the UI to avoid crashes
-        if(isAdded && _binding != null){
-            binding.downloadButton.isEnabled = false
-            binding.downloadButton.text = getString(R.string.downloading)
-            binding.downloadProgressBar.progress = 0
-            binding.downloadProgressBar.visibility = View.VISIBLE
-        }
-        else{
-            Log.d("CloudSaveFragment", "Skipping UI update in downloadDatabaseFromDriveSafe: Fragment not in a valid state.")
-            return
+        //Create download notification
+        val notificationManager = requireContext().getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channel_id = "drive_notification_channel"
+        val notification_id = 1003
+
+        // Ensure the notification channel exists (for Android 8.0+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channel_id,
+                "Drive Download",
+                NotificationManager.IMPORTANCE_LOW
+            )
+            notificationManager.createNotificationChannel(channel)
         }
 
-        viewLifecycleOwner.lifecycleScope.launch {
+        val notificationBuilder = NotificationCompat.Builder(requireContext(), channel_id)
+            .setSmallIcon(R.drawable.download)
+            .setContentTitle("Downloading Backup from drive")
+            .setContentText("Download in progress...")
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOnlyAlertOnce(true)
+            .setProgress(100 , 0 , true)
+
+        CoroutineScope(Dispatchers.Main).launch {
             try {
                 val success = withContext(Dispatchers.IO) {
                     // Step 1: Look up file in Drive
@@ -509,8 +576,11 @@ class CloudSaveFragment : Fragment() {
                             val percent = (prog.progress * 100).toInt()
                             if (prog.downloadState == MediaHttpDownloader.DownloadState.MEDIA_IN_PROGRESS) {
                                 Log.d("Download", "Progress: $percent%")
-                                viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
-                                    binding.downloadProgressBar.progress = percent
+                                CoroutineScope(Dispatchers.Main).launch(Dispatchers.Main) {
+                                    notificationBuilder.setContentText("Downloading backup : $percent%")
+                                        .setProgress(0, 0, false)
+                                        .setProgress(100 , percent , false)
+                                    notificationManager.notify(notification_id, notificationBuilder.build())
                                 }
                             }
                         }
@@ -528,21 +598,22 @@ class CloudSaveFragment : Fragment() {
                 }
 
                 if (success) {
-                    Toast.makeText(requireContext(), "Backup downloaded successfully!", Toast.LENGTH_LONG).show()
+                    notificationBuilder.setContentText("Backup downloaded successfully!")
+                        .setProgress(0, 0, false)
+                        .setSmallIcon(R.drawable.download_done)
+                    notificationManager.notify(notification_id, notificationBuilder.build())
                     Log.d("CloudSaveFragment", "Database saved to ${getDatabaseFile().absolutePath}")
                 } else {
-                    Toast.makeText(requireContext(), "No database backup found in Drive.", Toast.LENGTH_LONG).show()
+                    notificationBuilder.setContentText("No database backup found.")
+                        .setProgress(0, 0, false)
+                    notificationManager.notify(notification_id, notificationBuilder.build())
                 }
 
             } catch (e: Exception) {
                 Log.e("CloudSaveFragment", "Download error: ${e.message}", e)
-                Toast.makeText(requireContext(), "Download failed: ${e.message}", Toast.LENGTH_LONG).show()
-            } finally {
-                if (isAdded && _binding != null && viewLifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-                    binding.downloadButton.isEnabled = true
-                    binding.downloadButton.text = getString(R.string.download_cloud_save)
-                    binding.downloadProgressBar.visibility = View.GONE
-                }
+                notificationBuilder.setContentText("Download failed: ${e.message}")
+                    .setProgress(0, 0, false)
+                notificationManager.notify(notification_id, notificationBuilder.build())
             }
         }
     }
