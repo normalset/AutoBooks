@@ -90,6 +90,7 @@ class BookDetailFragment : Fragment(){
             }
         }
 
+        //Setup book details
         book?.let{
             b ->
             titleText.text = b.title

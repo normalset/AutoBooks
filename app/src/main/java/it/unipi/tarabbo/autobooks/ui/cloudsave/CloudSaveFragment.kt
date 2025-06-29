@@ -64,9 +64,10 @@ class CloudSaveFragment : Fragment() {
     private var driveService: Drive? = null
     val REQUEST_GOOGLE_SIGN_IN = 1002
 
-    // Database file name
-    private val DATABASE_NAME = "AutoBooksDB.db" // Make sure this matches your DatabaseHelper.DATABASE_NAME
+    var driveOperationInProgress = false
 
+    // Database file name
+    private val DATABASE_NAME = "AutoBooksDB.db"
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -107,9 +108,12 @@ class CloudSaveFragment : Fragment() {
         binding.uploadButton.setOnClickListener {
             viewLifecycleOwner.lifecycleScope.launch {
                 try{
-                    Thread {
-                        uploadDatabaseToDrive()
-                    }.start()
+                    if(!driveOperationInProgress) { //if there is no drive operation in progress start thread\
+
+                        Thread {
+                            uploadDatabaseToDrive()
+                        }.start()
+                    }
                 }catch(e : Exception){
                     Log.e("CloudSaveFragment", "Error uploading database: ${e.message}")
                 }
@@ -118,9 +122,12 @@ class CloudSaveFragment : Fragment() {
         binding.downloadButton.setOnClickListener {
             viewLifecycleOwner.lifecycleScope.launch {
                 try{
-                    Thread{
-                        downloadDatabaseFromDriveSafe()
-                    }.start()
+                    if(!driveOperationInProgress){ //if there is no drive operation in progress start thread
+                        driveOperationInProgress = true
+                        Thread{
+                            downloadDatabaseFromDriveSafe()
+                        }.start()
+                    }
                 }catch(e : Exception){
                     Log.e("CloudSaveFragment", "Error downloading database: ${e.message}")
                 }
@@ -287,18 +294,19 @@ class CloudSaveFragment : Fragment() {
         }
     }
 
-    // --- Google Drive Upload/Download Functionality ---
-
     private fun getDatabaseFile(): File {
         // Returns the path to your database file
         return requireContext().getDatabasePath(DATABASE_NAME)
     }
 
     /*
+    * --- Google Drive Upload/Download Functionalities ---
     * The approach of using callbacks to get results from the drive operations is no longer supported in the latest version Drive REST API v3
     * So coroutines are used instead with Dispatchers.IO
-     */
+    * Notifications are used to inform the user of the progress of the drive operations
+    */
 
+    //old function - not used
     private fun uploadDatabaseToDrive() {
         if (driveService == null) {
             Toast.makeText(requireContext(), "Not signed in to Google Drive.", Toast.LENGTH_SHORT).show()
@@ -415,6 +423,9 @@ class CloudSaveFragment : Fragment() {
                 notificationBuilder.setContentText("Upload failed: ${e.message}")
                     .setProgress(0, 0, false)
                 notificationManager.notify(notification_id, notificationBuilder.build())
+            }finally{
+                //after all operations and regardless of output, drive operation is no longer in progress
+                driveOperationInProgress = false
             }
         }
     }
@@ -614,13 +625,12 @@ class CloudSaveFragment : Fragment() {
                 notificationBuilder.setContentText("Download failed: ${e.message}")
                     .setProgress(0, 0, false)
                 notificationManager.notify(notification_id, notificationBuilder.build())
+            }finally{
+                //after all operations and regardless of output, drive operation is no longer in progress
+                driveOperationInProgress = false
             }
         }
     }
-
-
-
-
 
     private fun updateUI(email: String?, displayName: String?, photoUri: Uri?) {
         // Crucial safety check: Ensure view is still alive and binding is not null
@@ -660,12 +670,12 @@ class CloudSaveFragment : Fragment() {
         super.onDestroyView()
         Log.d("CloudSaveFragment", "onDestroyView called, setting _binding to null.")
 
-        //Remove any remaining temp files
-        requireContext().cacheDir.listFiles()?.forEach { file ->
-            if (file.name.startsWith("db_download") && file.name.endsWith(".tmp")) {
-                file.delete()
-            }
-        }
+        //Remove any remaining temp files -> keep if download still running when view destroyed
+//        requireContext().cacheDir.listFiles()?.forEach { file ->
+//            if (file.name.startsWith("db_download") && file.name.endsWith(".tmp")) {
+//                file.delete()
+//            }
+//        }
 
         _binding = null
     }

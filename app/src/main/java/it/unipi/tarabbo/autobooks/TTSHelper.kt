@@ -28,7 +28,7 @@ class TTSHelper(private val context: Context, private val dbHelper: DatabaseHelp
         var mediaPlayer: MediaPlayer? = MediaPlayer()
     }
 
-    private var tts: TextToSpeech? = null
+    var tts: TextToSpeech? = null
 
 
     //Callback to notify when playback is complete
@@ -60,7 +60,7 @@ class TTSHelper(private val context: Context, private val dbHelper: DatabaseHelp
 
     /**
      * Generate audio for each line in chapter text, save blobs in DB, and mark chapter as audioGenerated=true
-     * This function runs asynchronously using coroutines and suspend keyword
+     * This function runs asynchronously using coroutines
      */
     suspend fun generateAudioForChapter(chapter: Chapter): Boolean {
         // If already generated, skip
@@ -76,7 +76,7 @@ class TTSHelper(private val context: Context, private val dbHelper: DatabaseHelp
         // Split text into lines by newline
         val lines = chapter.text.split("\n").filter { it.isNotBlank() }
 
-        // Initialize TextToSpeech synchronously
+        // Initialize TextToSpeech
         tts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
                try{
@@ -197,8 +197,8 @@ class TTSHelper(private val context: Context, private val dbHelper: DatabaseHelp
 
             mediaPlayer = MediaPlayer().apply {
                 setDataSource(tempFile.absolutePath)
-//                prepare()
-                prepareAsync()
+                prepare()
+//                prepareAsync()
                 setOnCompletionListener {
 //                    it.release()
                     tempFile.delete()
@@ -221,7 +221,7 @@ class TTSHelper(private val context: Context, private val dbHelper: DatabaseHelp
      */
     private suspend fun synthesizeToFile(text: String, file: File): Boolean = suspendCoroutine { cont ->
         val params = Bundle()
-        val utteranceId = UUID.randomUUID().toString()
+        val utteranceId = UUID.randomUUID().toString() //to differentiate audio lines
 
         tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {
@@ -250,7 +250,6 @@ class TTSHelper(private val context: Context, private val dbHelper: DatabaseHelp
      * Helper to suspend until TTS is initialized
      */
     private suspend fun waitForTTSInit() = suspendCoroutine<Unit> { cont ->
-        // This can be improved with proper synchronization if needed
         Thread {
             var retries = 0
             while (tts == null || tts?.language == null) {
@@ -279,7 +278,7 @@ class TTSHelper(private val context: Context, private val dbHelper: DatabaseHelp
             } finally {
                 Log.d("MEDIAPLAYER_LOG", "MediaPlayer released")
                 player.release()
-                mediaPlayer = null  // Also clear the reference so you don't reuse released player
+                mediaPlayer = null  // clear the reference released players are not reused
             }
         }
     }
@@ -289,8 +288,8 @@ class TTSHelper(private val context: Context, private val dbHelper: DatabaseHelp
     * Functions for the audiobook progress notifications
     */
 
-    private val DOWNLOAD_NOTIFICATION_ID = 1001
-    private val PLAYBACK_NOTIFICATION_ID = 1002
+    private val DOWNLOAD_NOTIFICATION_ID = 1006
+    private val PLAYBACK_NOTIFICATION_ID = 1007
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -337,7 +336,7 @@ class TTSHelper(private val context: Context, private val dbHelper: DatabaseHelp
         notificationManager.notify(DOWNLOAD_NOTIFICATION_ID, builder.build())
     }
 
-    /* Functions for playback notifications */
+    /* Functions for TTS playback notifications */
     fun createPlaybackNotificationChannel(context: Context) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

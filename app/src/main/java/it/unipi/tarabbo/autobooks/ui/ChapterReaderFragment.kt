@@ -163,7 +163,7 @@ class ChapterReaderFragment : Fragment(){
 
             audioAvailable = chapter.audioGenerated
 
-            //set tts button listener
+            //set tts button listener : Download or delete audio
             button.setOnClickListener {
                 if (audioAvailable) { // chapters audio already generated
                     // Show confirmation dialog asking the user if they want to delete the audio
@@ -234,6 +234,10 @@ class ChapterReaderFragment : Fragment(){
         }
     }
 
+    /*
+    *  Custom setup of media controls for the chapter reader media interface
+    *  A custom setup like this is required given the nature of how the audiobytes-line work since there is no whole audio file for the chapter
+    */
     fun setupMediaControls(
         playButton : ImageButton ,
         prevButton : ImageButton ,

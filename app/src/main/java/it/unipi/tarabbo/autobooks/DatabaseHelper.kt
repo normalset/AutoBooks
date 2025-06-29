@@ -61,7 +61,7 @@ class DatabaseHelper (context : Context) : SQLiteOpenHelper(context , DATABASE_N
     }
 
     /*
-        * Utility functions to add data and query
+        * Utility functions to add a book to the books table and create it's chapters table
     */
     fun insertBook(
         title:String,
