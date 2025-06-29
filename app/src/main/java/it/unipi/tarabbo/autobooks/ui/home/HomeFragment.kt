@@ -152,7 +152,12 @@ class HomeFragment : Fragment() {
                     author.text = book.author
                     val chaptersText =  "Chapters : ${book.numChapters}"
                     numChapters.text =chaptersText
-                    val completionText = "Completion : ${(book.chaptersRead * 100 / book.numChapters)}%"
+                    var completionText = if(book.numChapters.toInt() != 0 ){
+                        "Completion : ${(book.chaptersRead * 100 / (book.numChapters))}%"
+                    }else{
+                        "Completion :0%"
+                    }
+
                     completion.text = completionText
                 }
 

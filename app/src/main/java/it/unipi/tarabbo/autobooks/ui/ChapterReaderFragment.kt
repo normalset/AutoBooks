@@ -267,8 +267,7 @@ class ChapterReaderFragment : Fragment(){
                if(playingAudio){
                    //Stop current audio and play previous line
                    ttsHelper.stopAudio()
-                   playingAudio = false
-                   playButton.setImageResource(R.drawable.play_button_arrowhead)
+                   playingAudio = true
                    if(currentLine > 1) currentLine--
                    updateProgressBar()
                    playLine(ttsHelper , chapter)
@@ -288,8 +287,7 @@ class ChapterReaderFragment : Fragment(){
                 if(playingAudio){
                     //Stop current audio and play next line
                     ttsHelper.stopAudio()
-                    playingAudio = false
-                    playButton.setImageResource(R.drawable.play_button_arrowhead)
+                    playingAudio = true
                     if(currentLine < lineRanges.size) currentLine++
                     updateProgressBar()
                     playLine(ttsHelper , chapter)
@@ -365,7 +363,7 @@ class ChapterReaderFragment : Fragment(){
         updateProgressBar()
         lifecycleScope.launch(Dispatchers.IO){
             try{
-                val lineAudio = ttsHelper.getAudioForLine(chapter.bookId , chapter.chapterNumber , currentLine)
+                val lineAudio = ttsHelper.getAudioForLine(chapter.bookId , chapter.chapterNumber,currentLine)
                 if( lineAudio != null){
                     ttsHelper.onPlaybackComplete = {
                         onLineFinished(ttsHelper , chapter)

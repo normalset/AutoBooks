@@ -46,7 +46,7 @@ class TTSHelper(private val context: Context, private val dbHelper: DatabaseHelp
     fun createTableIfNeeded() {
         val db: SQLiteDatabase = dbHelper.writableDatabase
         val createTableQuery = """
-            CREATE TABLE IF NOT EXISTS $TABLE_NAME (
+            CREATE TABLE IF NOT EXISTS ${TABLE_NAME} (
                 bookId INTEGER NOT NULL,
                 chapterNumber INTEGER NOT NULL,
                 lineIndex INTEGER NOT NULL,
@@ -55,7 +55,7 @@ class TTSHelper(private val context: Context, private val dbHelper: DatabaseHelp
             );
         """.trimIndent()
         db.execSQL(createTableQuery)
-        Log.d(TAG, "Table $TABLE_NAME checked/created")
+        Log.d(TAG, "Table ${TABLE_NAME} checked/created")
     }
 
     /**
@@ -120,6 +120,9 @@ class TTSHelper(private val context: Context, private val dbHelper: DatabaseHelp
             // Read audio file bytes
             val audioBytes = audioFile.readBytes()
 
+            //Create chapter text table if needed
+            createTableIfNeeded()
+
             // Save in DB
             val values = ContentValues().apply {
                 put("bookId", chapter.bookId)
@@ -166,7 +169,7 @@ class TTSHelper(private val context: Context, private val dbHelper: DatabaseHelp
         try{
             val db = dbHelper.readableDatabase
             val cursor = db.rawQuery(
-                "SELECT audioData FROM $TABLE_NAME WHERE bookId = ? AND chapterNumber = ? AND lineIndex = ?",
+                "SELECT audioData FROM ${TABLE_NAME} WHERE bookId = ? AND chapterNumber = ? AND lineIndex = ?",
                 arrayOf(bookId.toString(), chapterNumber.toString(), lineIndex.toString())
             )
             cursor.use {
@@ -268,7 +271,7 @@ class TTSHelper(private val context: Context, private val dbHelper: DatabaseHelp
     fun stopAudio() {
         mediaPlayer?.let { player ->
             try {
-                if (player.isPlaying) {
+                if(player.isPlaying) {
                     Log.d("MEDIAPLAYER_LOG", "MediaPlayer stopped")
                     player.stop()
                 }
